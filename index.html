@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>학회 아카이브</title>
+
+  <!--
+  ============================================================
+  학회 아카이브 사이트 유지보수 가이드
+  ============================================================
+
+  이 파일은 구글 스프레드시트를 간단한 DB처럼 사용합니다.
+  별도의 서버, API Key, 로그인 기능 없이 구글 시트의
+  [파일 > 공유 > 웹에 게시 > CSV] 주소만으로 데이터를 불러옵니다.
+
+  1. 구글 스프레드시트에 아래 두 개의 시트를 만듭니다.
+
+     [Members 시트]
+     이름 | 연약 기수 | YST 기수 | 활동 시작 | 활동 종료 | 졸업 여부 | 현재 소속
+
+     입력 예시:
+     홍길동 | 12 | 3 | 25-2 | 26-1 | 0 | 연세대학교 약학대학
+
+     - 연약 기수, YST 기수: 숫자만 입력합니다.
+     - 활동 시작, 활동 종료: 26-1, 25-2처럼 학기 형식으로 입력합니다.
+     - 졸업 여부: 0은 미졸업, 1은 졸업입니다.
+     - 현재 소속: 자유 텍스트로 입력합니다.
+
+     [Presentations 시트]
+     날짜 | 주제 | 발표유형 | 발표자명단 | 자료링크
+
+  2. 각 시트를 각각 CSV로 웹에 게시합니다.
+     구글 스프레드시트 상단 메뉴에서:
+     파일 > 공유 > 웹에 게시 > 게시할 시트 선택 > 형식: CSV > 게시
+
+  3. 아래 CONFIG 영역의 MEMBERS_CSV_URL, PRESENTATIONS_CSV_URL만
+     본인의 CSV 게시 URL로 교체하면 됩니다.
+
+  4. 발표자명단은 쉼표로 구분해서 입력합니다.
+     예: 김민수, 이지은, 박진우
+
+  5. 특정 회원 이름을 클릭하면 그 사람이 참여한 발표만 아래에 표시됩니다.
+     팀 발표도 발표자명단 안에 이름이 들어 있으면 자동으로 검색됩니다.
+
+  6. 웹에 게시된 구글 시트는 완전한 비공개 DB가 아닙니다.
+     외부에 노출되면 안 되는 개인정보나 민감정보는 넣지 않는 것이 안전합니다.
+
+  7. GitHub Pages, Netlify, Vercel 등에 이 index.html 하나만 올려도 작동합니다.
+  ============================================================
+  -->
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ["Pretendard", "Inter", "system-ui", "sans-serif"],
+          },
+        },
+      },
+    };
+  </script>
+</head>
+
+<body class="bg-slate-50 text-slate-900 font-sans">
+  <div class="min-h-screen">
+    <header class="border-b border-slate-200 bg-white">
+      <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <p class="text-sm font-medium text-slate-500">Academic Society Archive</p>
+        <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
+          학회 아카이브
+        </h1>
+        <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+          회원 현황과 역대 발표 자료를 구글 스프레드시트와 연동하여 관리합니다.
+        </p>
+      </div>
+    </header>
+
+    <main class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <section id="statusBox" class="mb-6 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+        데이터를 불러오는 중입니다.
+      </section>
+
+      <section class="grid gap-6 lg:grid-cols-[1fr_1.25fr]">
+        <div class="space-y-6">
+          <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex items-end justify-between gap-4">
+              <div>
+                <h2 class="text-xl font-bold text-slate-950">Alumni 현황</h2>
+                <p class="mt-1 text-sm text-slate-500">기수별 회원 목록</p>
+              </div>
+              <button
+                id="clearFilterBtn"
+                class="hidden rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
+              >
+                필터 해제
+              </button>
+            </div>
+            <div id="membersContainer" class="mt-5 space-y-4"></div>
+          </section>
+        </div>
+
+        <div class="space-y-6">
+          <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 id="presentationTitle" class="text-xl font-bold text-slate-950">발표 아카이브</h2>
+                <p id="presentationSubtitle" class="mt-1 text-sm text-slate-500">최신 발표순 정렬</p>
+              </div>
+              <input
+                id="searchInput"
+                type="search"
+                placeholder="주제, 발표자, 유형 검색"
+                class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2 sm:w-64"
+              />
+            </div>
+            <div id="presentationsContainer" class="mt-5 space-y-3"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // ============================================================
+    // CONFIG: 이 두 주소만 본인 구글 시트 CSV 게시 URL로 교체하세요.
+    // ============================================================
+    const MEMBERS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/YOUR_MEMBERS_CSV_URL/pub?output=csv";
+    const PRESENTATIONS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/YOUR_PRESENTATIONS_CSV_URL/pub?output=csv";
+
+    // ============================================================
+    // 전역 상태
+    // ============================================================
+    let members = [];
+    let presentations = [];
+    let selectedMember = null;
+
+    const statusBox = document.getElementById("statusBox");
+    const membersContainer = document.getElementById("membersContainer");
+    const presentationsContainer = document.getElementById("presentationsContainer");
+    const presentationTitle = document.getElementById("presentationTitle");
+    const presentationSubtitle = document.getElementById("presentationSubtitle");
+    const clearFilterBtn = document.getElementById("clearFilterBtn");
+    const searchInput = document.getElementById("searchInput");
+
+    // ============================================================
+    // CSV 파서
+    // 쉼표, 따옴표, 줄바꿈이 포함된 CSV도 어느 정도 처리합니다.
+    // ============================================================
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let insideQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const nextChar = text[i + 1];
+
+        if (char === '"' && insideQuotes && nextChar === '"') {
+          cell += '"';
+          i++;
+        } else if (char === '"') {
+          insideQuotes = !insideQuotes;
+        } else if (char === "," && !insideQuotes) {
+          row.push(cell.trim());
+          cell = "";
+        } else if ((char === "\n" || char === "\r") && !insideQuotes) {
+          if (char === "\r" && nextChar === "\n") i++;
+          row.push(cell.trim());
+          if (row.some(value => value !== "")) rows.push(row);
+          row = [];
+          cell = "";
+        } else {
+          cell += char;
+        }
+      }
+
+      row.push(cell.trim());
+      if (row.some(value => value !== "")) rows.push(row);
+
+      const headers = rows[0].map(header => header.trim());
+      return rows.slice(1).map(row => {
+        const obj = {};
+        headers.forEach((header, index) => {
+          obj[header] = row[index] || "";
+        });
+        return obj;
+      });
+    }
+
+    async function fetchCSV(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`CSV를 불러오지 못했습니다: ${response.status}`);
+      }
+      const text = await response.text();
+      return parseCSV(text);
+    }
+
+    function normalizeName(name) {
+      return String(name || "").replace(/\s+/g, "").trim();
+    }
+
+    function splitPresenters(value) {
+      return String(value || "")
+        .split(",")
+        .map(name => name.trim())
+        .filter(Boolean);
+    }
+
+    function isMemberInPresentation(memberName, presentation) {
+      const target = normalizeName(memberName);
+      return splitPresenters(presentation["발표자명단"]).some(name => normalizeName(name) === target);
+    }
+
+    function formatGraduationStatus(value) {
+      const normalized = String(value ?? "").trim();
+      if (normalized === "0") return "미졸업";
+      if (normalized === "1") return "졸업";
+      return normalized || "상태 미상";
+    }
+
+    function formatDate(dateString) {
+      if (!dateString) return "날짜 미정";
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    }
+
+    function sortByDateDesc(items) {
+      return [...items].sort((a, b) => {
+        const dateA = new Date(a["날짜"]).getTime() || 0;
+        const dateB = new Date(b["날짜"]).getTime() || 0;
+        return dateB - dateA;
+      });
+    }
+
+    function groupMembersByGeneration(memberList) {
+      return memberList.reduce((groups, member) => {
+        const generation = member["연약 기수"] || "기수 미상";
+        if (!groups[generation]) groups[generation] = [];
+        groups[generation].push(member);
+        return groups;
+      }, {});
+    }
+
+    function renderMembers() {
+      const groups = groupMembersByGeneration(members);
+      const generationKeys = Object.keys(groups).sort((a, b) => {
+        const numA = parseInt(a, 10);
+        const numB = parseInt(b, 10);
+        if (Number.isNaN(numA) || Number.isNaN(numB)) return String(a).localeCompare(String(b), "ko-KR");
+        return numA - numB;
+      });
+
+      membersContainer.innerHTML = generationKeys.map(generation => {
+        const memberCards = groups[generation]
+          .sort((a, b) => String(a["이름"]).localeCompare(String(b["이름"]), "ko-KR"))
+          .map(member => {
+            const name = member["이름"] || "이름 없음";
+            const isSelected = selectedMember === name;
+            const status = formatGraduationStatus(member["졸업 여부"]);
+            const affiliation = member["현재 소속"] || "소속 미상";
+            const ystGeneration = member["YST 기수"] || "-";
+            const activityStart = member["활동 시작"] || "?";
+            const activityEnd = member["활동 종료"] || "현재";
+
+            return `
+              <button
+                type="button"
+                class="member-btn w-full rounded-xl border px-4 py-3 text-left transition ${
+                  isSelected
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-white"
+                }"
+                data-name="${escapeHTML(name)}"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-semibold">${escapeHTML(name)}</span>
+                  <span class="rounded-full ${isSelected ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700"} px-2 py-0.5 text-xs">
+                    ${escapeHTML(status)}
+                  </span>
+                </div>
+                <p class="mt-1 text-xs ${isSelected ? "text-slate-200" : "text-slate-500"}">
+                  YST ${escapeHTML(ystGeneration)}기 · ${escapeHTML(activityStart)} ~ ${escapeHTML(activityEnd)}
+                </p>
+                <p class="mt-1 text-xs ${isSelected ? "text-slate-200" : "text-slate-500"}">
+                  ${escapeHTML(affiliation)}
+                </p>
+              </button>
+            `;
+          })
+          .join("");
+
+        return `
+          <div>
+            <h3 class="mb-2 text-sm font-bold text-slate-700">연약 ${escapeHTML(generation)}기</h3>
+            <div class="space-y-2">${memberCards}</div>
+          </div>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".member-btn").forEach(button => {
+        button.addEventListener("click", () => {
+          selectedMember = button.dataset.name;
+          searchInput.value = "";
+          renderMembers();
+          renderPresentations();
+        });
+      });
+    }
+
+    function renderPresentations() {
+      const keyword = searchInput.value.trim().toLowerCase();
+      let filtered = presentations;
+
+      if (selectedMember) {
+        filtered = filtered.filter(presentation => isMemberInPresentation(selectedMember, presentation));
+        presentationTitle.textContent = `${selectedMember} 참여 발표`;
+        presentationSubtitle.textContent = "개인 발표와 팀 발표를 모두 포함합니다.";
+        clearFilterBtn.classList.remove("hidden");
+      } else {
+        presentationTitle.textContent = "발표 아카이브";
+        presentationSubtitle.textContent = "최신 발표순 정렬";
+        clearFilterBtn.classList.add("hidden");
+      }
+
+      if (keyword) {
+        filtered = filtered.filter(presentation => {
+          const haystack = [
+            presentation["주제"],
+            presentation["발표유형"],
+            presentation["발표자명단"],
+            presentation["날짜"],
+          ].join(" ").toLowerCase();
+          return haystack.includes(keyword);
+        });
+      }
+
+      const sorted = sortByDateDesc(filtered);
+
+      if (sorted.length === 0) {
+        presentationsContainer.innerHTML = `
+          <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+            표시할 발표가 없습니다.
+          </div>
+        `;
+        return;
+      }
+
+      presentationsContainer.innerHTML = sorted.map(presentation => {
+        const date = presentation["날짜"] || "";
+        const topic = presentation["주제"] || "주제 없음";
+        const type = presentation["발표유형"] || "유형 미상";
+        const presenters = splitPresenters(presentation["발표자명단"]);
+        const link = presentation["자료링크"] || "";
+
+        const presenterBadges = presenters.map(name => `
+          <button
+            type="button"
+            class="presenter-link rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-900 hover:text-white"
+            data-name="${escapeHTML(name)}"
+          >
+            ${escapeHTML(name)}
+          </button>
+        `).join(" ");
+
+        return `
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500">${escapeHTML(formatDate(date))}</p>
+                <h3 class="mt-1 text-base font-bold leading-6 text-slate-950">${escapeHTML(topic)}</h3>
+              </div>
+              <span class="w-fit rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">
+                ${escapeHTML(type)}
+              </span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              ${presenterBadges || '<span class="text-xs text-slate-400">발표자 미상</span>'}
+            </div>
+
+            ${link ? `
+              <a
+                href="${escapeAttribute(link)}"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-4 inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+              >
+                자료 보기
+              </a>
+            ` : `
+              <p class="mt-4 text-sm text-slate-400">등록된 자료 링크가 없습니다.</p>
+            `}
+          </article>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".presenter-link").forEach(button => {
+        button.addEventListener("click", () => {
+          selectedMember = button.dataset.name;
+          searchInput.value = "";
+          renderMembers();
+          renderPresentations();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
+    }
+
+    function escapeHTML(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHTML(value).replaceAll("`", "&#096;");
+    }
+
+    clearFilterBtn.addEventListener("click", () => {
+      selectedMember = null;
+      renderMembers();
+      renderPresentations();
+    });
+
+    searchInput.addEventListener("input", renderPresentations);
+
+    async function init() {
+      try {
+        if (MEMBERS_CSV_URL.includes("YOUR_MEMBERS_CSV_URL") || PRESENTATIONS_CSV_URL.includes("YOUR_PRESENTATIONS_CSV_URL")) {
+          statusBox.textContent = "상단 CONFIG 영역의 구글 시트 CSV URL을 먼저 입력하세요.";
+          statusBox.className = "mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 shadow-sm";
+          return;
+        }
+
+        const [memberRows, presentationRows] = await Promise.all([
+          fetchCSV(MEMBERS_CSV_URL),
+          fetchCSV(PRESENTATIONS_CSV_URL),
+        ]);
+
+        members = memberRows;
+        presentations = presentationRows;
+
+        renderMembers();
+        renderPresentations();
+
+        statusBox.textContent = `회원 ${members.length}명, 발표 ${presentations.length}건을 불러왔습니다.`;
+        statusBox.className = "mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
+      } catch (error) {
+        console.error(error);
+        statusBox.textContent = "데이터를 불러오지 못했습니다. CSV URL이 올바른지, 구글 시트가 웹에 게시되어 있는지 확인하세요.";
+        statusBox.className = "mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm";
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
