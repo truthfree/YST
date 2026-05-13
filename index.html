@@ -242,9 +242,11 @@
       });
     }
 
-    function groupMembersByGeneration(memberList) {
+    function groupMembersByGeneration(memberList, type = 'yonyak') {
       return memberList.reduce((groups, member) => {
-        const generation = member['연약 기수'] || '기수 미상';
+        const generation = type === 'yst'
+          ? (member['YST 기수'] || '기수 미상')
+          : (member['연약 기수'] || '기수 미상');
         if (!groups[generation]) groups[generation] = [];
         groups[generation].push(member);
         return groups;
@@ -280,8 +282,8 @@
       `;
     }
 
-    function createMemberAccordion(memberList, defaultOpen) {
-      const groups = groupMembersByGeneration(memberList);
+    function createMemberAccordion(memberList, defaultOpen, type = 'yonyak') {
+      const groups = groupMembersByGeneration(memberList, type);
       const generationKeys = Object.keys(groups).sort((a, b) => {
         const numA = parseInt(a, 10);
         const numB = parseInt(b, 10);
@@ -299,7 +301,7 @@
         return `
           <details ${openAttribute} class="rounded-xl border border-slate-200 bg-slate-50 p-3">
             <summary class="cursor-pointer select-none text-sm font-bold text-slate-700">
-              연약 ${escapeHTML(generation)}기 · ${sortedMembers.length}명
+              ${type === 'yst' ? 'YST' : '연약'} ${escapeHTML(generation)}기 · ${sortedMembers.length}명
             </summary>
             <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               ${memberCards}
@@ -314,11 +316,11 @@
       const alumniMembers = sortMembers(getAlumniMembers());
 
       currentMembersContainer.innerHTML = currentMembers.length
-        ? createMemberAccordion(currentMembers, true)
+        ? createMemberAccordion(currentMembers, true, 'yst')
         : '<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">현재 활동 구성원이 없습니다.</div>';
 
       alumniContainer.innerHTML = alumniMembers.length
-        ? createMemberAccordion(alumniMembers, false)
+        ? createMemberAccordion(alumniMembers, false, 'yonyak')
         : '<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Alumni로 분류된 회원이 없습니다. 활동 종료 값을 입력하면 이곳에 표시됩니다.</div>';
 
       document.querySelectorAll('.member-btn').forEach(button => {
