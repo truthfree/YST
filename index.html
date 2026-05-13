@@ -10,6 +10,10 @@
   YST 아카이브 사이트 유지보수 가이드
   ============================================================
 
+  이 파일은 구글 스프레드시트를 간단한 DB처럼 사용합니다.
+  별도의 서버, API Key, 로그인 기능 없이 구글 시트의
+  [파일 > 공유 > 웹에 게시 > CSV] 주소만으로 데이터를 불러옵니다.
+
   Members 시트 컬럼:
   이름 | 연약 기수 | YST 기수 | 활동 시작 | 활동 종료 | 졸업 여부 | 현재 소속 | 비고
 
@@ -19,22 +23,36 @@
   분류 기준:
   - 활동 종료가 비어 있으면 현재 학부 현황에 표시됩니다.
   - 활동 종료에 값이 있으면 Alumni에 표시됩니다.
-  - 졸업 여부는 화면 표시용입니다. 0은 학부, 1은 졸업으로 표시됩니다.
-  - 예: 활동 종료 = 26-1, 25-2 등
+  - 졸업 여부는 표시용입니다. 0은 학부, 1은 졸업으로 표시됩니다.
 
-  수정할 곳:
-  아래 CONFIG 영역의 MEMBERS_CSV_URL, PRESENTATIONS_CSV_URL만 교체하면 됩니다.
+  목록 구조:
+  - 현재 학부 현황: 기수별 접기/펼치기, 기본 펼침
+  - Alumni: 기수별 접기/펼치기, 기본 접힘
+  - 회원 이름을 클릭하면 해당 회원의 발표 이력만 필터링됩니다.
+  - 현재 학부 영역과 Alumni 영역 모두 필터 해제 버튼을 제공합니다.
   ============================================================
   -->
 
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', 'Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
 </head>
 
 <body class="bg-slate-50 text-slate-900 font-sans">
   <div class="min-h-screen">
     <header class="border-b border-slate-200 bg-white">
       <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <p class="text-sm font-medium tracking-wide text-slate-500">Yaksight Society</p>
+        <p class="text-sm font-medium tracking-wide text-slate-500">Yonsei Scientific Thinkers Society</p>
         <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">YST 아카이브</h1>
         <p class="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
           연세대학교 약학대학 학술 학회 YST의 회원 기록과 역대 발표 자료를 아카이빙합니다.
@@ -48,95 +66,125 @@
       </section>
 
       <section class="grid gap-6 lg:grid-cols-2">
-        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="flex items-end justify-between gap-4">
+        <details open class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <summary class="flex cursor-pointer list-none items-end justify-between gap-4">
             <div>
               <h2 class="text-xl font-bold text-slate-950">현재 학부 현황</h2>
               <p class="mt-1 text-sm text-slate-500">활동 종료가 비어 있는 현재 활동 구성원</p>
             </div>
-            <button id="clearFilterBtn" class="hidden rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
-              필터 해제
-            </button>
-          </div>
-          <div id="undergraduateContainer" class="mt-5 space-y-3"></div>
-        </section>
+            <div class="flex items-center gap-2">
+              <button id="clearFilterBtnTop" class="hidden rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                필터 해제
+              </button>
+              <span class="text-sm text-slate-400">펼치기</span>
+            </div>
+          </summary>
 
-        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div class="mt-5">
+            <div>
+              <h2 class="text-xl font-bold text-slate-950">현재 학부 현황</h2>
+              <p class="mt-1 text-sm text-slate-500">활동 종료가 비어 있는 현재 활동 구성원</p>
+            </div>
+            <div id="currentMembersContainer" class="space-y-3"></div>
+          </div>
+        </details>
+
+        <details open class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <summary class="flex cursor-pointer list-none flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="presentationTitle" class="text-xl font-bold text-slate-950">학부 최근 발표 이력</h2>
+              <p id="presentationSubtitle" class="mt-1 text-sm text-slate-500">현재 활동 구성원이 참여한 발표를 최신순으로 표시합니다.</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-sm text-slate-400">펼치기</span>
+            </div>
+          </summary>
+
+          <div class="mt-5">
             <div>
               <h2 id="presentationTitle" class="text-xl font-bold text-slate-950">학부 최근 발표 이력</h2>
               <p id="presentationSubtitle" class="mt-1 text-sm text-slate-500">현재 활동 구성원이 참여한 발표를 최신순으로 표시합니다.</p>
             </div>
             <input id="searchInput" type="search" placeholder="주제, 발표자, 유형 검색" class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2 sm:w-64" />
           </div>
-          <div id="presentationsContainer" class="mt-5 space-y-3"></div>
-        </section>
+          <input id="searchInput" type="search" placeholder="주제, 발표자, 유형 검색" class="mb-5 w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm outline-none ring-slate-300 placeholder:text-slate-400 focus:ring-2" />
+          <div id="presentationsContainer" class="space-y-3"></div>
+          </div>
+        </details>
       </section>
 
       <section class="mt-10 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-950">Alumni</h2>
-          <p class="mt-1 text-sm text-slate-500">활동 종료가 입력된 졸업 및 활동 종료 회원</p>
+        <div class="flex items-end justify-between gap-4">
+          <div>
+            <h2 class="text-2xl font-bold text-slate-950">Alumni</h2>
+            <p class="mt-1 text-sm text-slate-500">활동 종료가 입력된 졸업 및 활동 종료 회원</p>
+          </div>
+          <button id="clearFilterBtnAlumni" class="hidden rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+            필터 해제
+          </button>
         </div>
-        <div id="alumniContainer" class="mt-6 space-y-6"></div>
+        <div id="alumniContainer" class="mt-6 space-y-4"></div>
       </section>
     </main>
   </div>
 
   <script>
-    const MEMBERS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSNSrGqe-XCRtTz1JUFwryiGMkCozLXXsvQcVWiNSsjV8KXFniPvMag7Kdo5d7sD4bkgYiVEnpXodkg/pub?gid=0&single=true&output=csv";
-    const PRESENTATIONS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSNSrGqe-XCRtTz1JUFwryiGMkCozLXXsvQcVWiNSsjV8KXFniPvMag7Kdo5d7sD4bkgYiVEnpXodkg/pub?gid=1048850726&single=true&output=csv";
+    const MEMBERS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSNSrGqe-XCRtTz1JUFwryiGMkCozLXXsvQcVWiNSsjV8KXFniPvMag7Kdo5d7sD4bkgYiVEnpXodkg/pub?gid=0&single=true&output=csv';
+    const PRESENTATIONS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSNSrGqe-XCRtTz1JUFwryiGMkCozLXXsvQcVWiNSsjV8KXFniPvMag7Kdo5d7sD4bkgYiVEnpXodkg/pub?gid=1048850726&single=true&output=csv';
 
     let members = [];
     let presentations = [];
     let selectedMember = null;
 
-    const statusBox = document.getElementById("statusBox");
-    const undergraduateContainer = document.getElementById("undergraduateContainer");
-    const alumniContainer = document.getElementById("alumniContainer");
-    const presentationsContainer = document.getElementById("presentationsContainer");
-    const presentationTitle = document.getElementById("presentationTitle");
-    const presentationSubtitle = document.getElementById("presentationSubtitle");
-    const clearFilterBtn = document.getElementById("clearFilterBtn");
-    const searchInput = document.getElementById("searchInput");
+    const statusBox = document.getElementById('statusBox');
+    const currentMembersContainer = document.getElementById('currentMembersContainer');
+    const alumniContainer = document.getElementById('alumniContainer');
+    const presentationsContainer = document.getElementById('presentationsContainer');
+    const presentationTitle = document.getElementById('presentationTitle');
+    const presentationSubtitle = document.getElementById('presentationSubtitle');
+    const clearFilterBtnTop = document.getElementById('clearFilterBtnTop');
+    const clearFilterBtnAlumni = document.getElementById('clearFilterBtnAlumni');
+    const searchInput = document.getElementById('searchInput');
 
     function parseCSV(text) {
       const rows = [];
       let row = [];
-      let cell = "";
+      let cell = '';
       let insideQuotes = false;
 
       for (let i = 0; i < text.length; i++) {
         const char = text[i];
         const nextChar = text[i + 1];
+        const code = char.charCodeAt(0);
+        const nextCode = nextChar ? nextChar.charCodeAt(0) : 0;
 
         if (char === '"' && insideQuotes && nextChar === '"') {
           cell += '"';
           i++;
         } else if (char === '"') {
           insideQuotes = !insideQuotes;
-        } else if (char === "," && !insideQuotes) {
+        } else if (char === ',' && !insideQuotes) {
           row.push(cell.trim());
-          cell = "";
-        } else if ((char === "\n" || char === "\r") && !insideQuotes) {
-          if (char === "\r" && nextChar === "\n") i++;
+          cell = '';
+        } else if ((code === 10 || code === 13) && !insideQuotes) {
+          if (code === 13 && nextCode === 10) i++;
           row.push(cell.trim());
-          if (row.some(function(value) { return value !== ""; })) rows.push(row);
+          if (row.some(value => value !== '')) rows.push(row);
           row = [];
-          cell = "";
+          cell = '';
         } else {
           cell += char;
         }
       }
 
       row.push(cell.trim());
-      if (row.some(function(value) { return value !== ""; })) rows.push(row);
+      if (row.some(value => value !== '')) rows.push(row);
 
-      const headers = rows[0].map(function(header) { return header.trim(); });
-      return rows.slice(1).map(function(row) {
+      const headers = rows[0].map(header => header.trim());
+      return rows.slice(1).map(row => {
         const obj = {};
-        headers.forEach(function(header, index) {
-          obj[header] = row[index] || "";
+        headers.forEach((header, index) => {
+          obj[header] = row[index] || '';
         });
         return obj;
       });
@@ -144,73 +192,74 @@
 
     async function fetchCSV(url) {
       const response = await fetch(url);
-      if (!response.ok) throw new Error("CSV를 불러오지 못했습니다.");
+      if (!response.ok) throw new Error('CSV를 불러오지 못했습니다.');
       const text = await response.text();
       return parseCSV(text);
     }
 
     function escapeHTML(value) {
-      return String(value || "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+      return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
     }
 
     function normalizeName(name) {
-      return String(name || "").replace(/\s+/g, "").trim();
+      return String(name || '').split(' ').join('').trim();
     }
 
     function splitPresenters(value) {
-      return String(value || "").split(",").map(function(name) {
-        return name.trim();
-      }).filter(Boolean);
+      return String(value || '').split(',').map(name => name.trim()).filter(Boolean);
     }
 
     function hasActivityEnded(member) {
-      return String(member["활동 종료"] || "").trim() !== "";
+      return String(member['활동 종료'] || '').trim() !== '';
     }
 
     function getCurrentMembers() {
-      return members.filter(function(member) {
-        return !hasActivityEnded(member);
-      });
+      return members.filter(member => !hasActivityEnded(member));
     }
 
     function getAlumniMembers() {
-      return members.filter(function(member) {
-        return hasActivityEnded(member);
-      });
+      return members.filter(member => hasActivityEnded(member));
     }
 
     function formatGraduationStatus(value) {
-      const normalized = String(value || "").trim();
-      if (normalized === "0") return "학부";
-      if (normalized === "1") return "졸업";
-      return normalized || "상태 미상";
+      const normalized = String(value || '').trim();
+      if (normalized === '0') return '학부';
+      if (normalized === '1') return '졸업';
+      return normalized || '상태 미상';
     }
 
-    function sortMembers(items) {
-      return items.slice().sort(function(a, b) {
-        const genA = parseInt(a["연약 기수"] || 9999, 10);
-        const genB = parseInt(b["연약 기수"] || 9999, 10);
-        if (genA !== genB) return genA - genB;
-        return String(a["이름"] || "").localeCompare(String(b["이름"] || ""), "ko-KR");
-      });
+    function formatDate(dateString) {
+      if (!dateString) return '날짜 미정';
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return dateString;
+      return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
     function sortByDateDesc(items) {
-      return items.slice().sort(function(a, b) {
-        const dateA = new Date(a["날짜"]).getTime() || 0;
-        const dateB = new Date(b["날짜"]).getTime() || 0;
+      return items.slice().sort((a, b) => {
+        const dateA = new Date(a['날짜']).getTime() || 0;
+        const dateB = new Date(b['날짜']).getTime() || 0;
         return dateB - dateA;
       });
     }
 
+    function sortMembers(items) {
+      return items.slice().sort((a, b) => {
+        const genA = parseInt(a['연약 기수'] || 9999, 10);
+        const genB = parseInt(b['연약 기수'] || 9999, 10);
+        if (genA !== genB) return genA - genB;
+        return String(a['이름'] || '').localeCompare(String(b['이름'] || ''), 'ko-KR');
+      });
+    }
+
     function groupMembersByGeneration(memberList) {
-      return memberList.reduce(function(groups, member) {
-        const generation = member["연약 기수"] || "기수 미상";
+      return memberList.reduce((groups, member) => {
+        const generation = member['연약 기수'] || '기수 미상';
         if (!groups[generation]) groups[generation] = [];
         groups[generation].push(member);
         return groups;
@@ -218,60 +267,79 @@
     }
 
     function createMemberCard(member) {
-      const name = member["이름"] || "이름 없음";
+      const name = member['이름'] || '이름 없음';
       const isSelected = selectedMember === name;
-      const status = formatGraduationStatus(member["졸업 여부"]);
-      const affiliation = member["현재 소속"] || "소속 미상";
-      const yonYakGeneration = member["연약 기수"] || "-";
-      const ystGeneration = member["YST 기수"] || "-";
-      const activityStart = member["활동 시작"] || "?";
-      const activityEnd = member["활동 종료"] || "현재";
-      const note = member["비고"] || "";
-      const selectedClass = isSelected ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-white";
-      const mutedText = isSelected ? "text-slate-200" : "text-slate-500";
-      const statusClass = isSelected ? "bg-white/15 text-white" : "bg-slate-200 text-slate-700";
-      const noteClass = isSelected ? "bg-white/10 text-white" : "bg-amber-100 text-amber-800";
+      const status = formatGraduationStatus(member['졸업 여부']);
+      const affiliation = member['현재 소속'] || '소속 미상';
+      const yonYakGeneration = member['연약 기수'] || '-';
+      const ystGeneration = member['YST 기수'] || '-';
+      const activityStart = member['활동 시작'] || '?';
+      const activityEnd = member['활동 종료'] || '현재';
+      const note = member['비고'] || '';
+      const selectedClass = isSelected ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-white';
+      const mutedText = isSelected ? 'text-slate-200' : 'text-slate-500';
+      const statusClass = isSelected ? 'bg-white/15 text-white' : 'bg-slate-200 text-slate-700';
+      const noteClass = isSelected ? 'bg-white/10 text-white' : 'bg-amber-100 text-amber-800';
 
-      let html = "";
-      html += "<button type='button' class='member-btn w-full rounded-xl border px-4 py-3 text-left transition " + selectedClass + "' data-name='" + escapeHTML(name) + "'>";
-      html += "<div class='flex items-center justify-between gap-3'>";
-      html += "<span class='font-semibold'>" + escapeHTML(name) + "</span>";
-      html += "<span class='rounded-full " + statusClass + " px-2 py-0.5 text-xs'>" + escapeHTML(status) + "</span>";
-      html += "</div>";
-      html += "<p class='mt-1 text-xs " + mutedText + "'>연약 " + escapeHTML(yonYakGeneration) + "기 · YST " + escapeHTML(ystGeneration) + "기</p>";
-      html += "<p class='mt-1 text-xs " + mutedText + "'>활동 " + escapeHTML(activityStart) + " ~ " + escapeHTML(activityEnd) + "</p>";
-      html += "<p class='mt-1 text-xs " + mutedText + "'>" + escapeHTML(affiliation) + "</p>";
-      if (note) html += "<div class='mt-2 inline-flex rounded-full " + noteClass + " px-2 py-1 text-[11px] font-medium'>" + escapeHTML(note) + "</div>";
-      html += "</button>";
-      return html;
+      return `
+        <button type="button" class="member-btn w-full rounded-xl border px-4 py-3 text-left transition ${selectedClass}" data-name="${escapeHTML(name)}">
+          <div class="flex items-center justify-between gap-3">
+            <span class="font-semibold">${escapeHTML(name)}</span>
+            <span class="rounded-full ${statusClass} px-2 py-0.5 text-xs">${escapeHTML(status)}</span>
+          </div>
+          <p class="mt-1 text-xs ${mutedText}">연약 ${escapeHTML(yonYakGeneration)}기 · YST ${escapeHTML(ystGeneration)}기</p>
+          <p class="mt-1 text-xs ${mutedText}">활동 ${escapeHTML(activityStart)} ~ ${escapeHTML(activityEnd)}</p>
+          <p class="mt-1 text-xs ${mutedText}">${escapeHTML(affiliation)}</p>
+          ${note ? `<div class="mt-2 inline-flex rounded-full ${noteClass} px-2 py-1 text-[11px] font-medium">${escapeHTML(note)}</div>` : ''}
+        </button>
+      `;
+    }
+
+    function createMemberAccordion(memberList, defaultOpen) {
+      const groups = groupMembersByGeneration(memberList);
+      const generationKeys = Object.keys(groups).sort((a, b) => {
+        const numA = parseInt(a, 10);
+        const numB = parseInt(b, 10);
+        if (Number.isNaN(numA) || Number.isNaN(numB)) return String(a).localeCompare(String(b), 'ko-KR');
+        return numA - numB;
+      });
+
+      if (generationKeys.length === 0) return '';
+
+      return generationKeys.map(generation => {
+        const sortedMembers = sortMembers(groups[generation]);
+        const memberCards = sortedMembers.map(createMemberCard).join('');
+        const openAttribute = defaultOpen ? 'open' : '';
+
+        return `
+          <details ${openAttribute} class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <summary class="cursor-pointer select-none text-sm font-bold text-slate-700">
+              연약 ${escapeHTML(generation)}기 · ${sortedMembers.length}명
+            </summary>
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              ${memberCards}
+            </div>
+          </details>
+        `;
+      }).join('');
     }
 
     function renderMembers() {
       const currentMembers = sortMembers(getCurrentMembers());
-      const alumniMembers = getAlumniMembers();
+      const alumniMembers = sortMembers(getAlumniMembers());
 
-      undergraduateContainer.innerHTML = currentMembers.length
-        ? currentMembers.map(createMemberCard).join("")
-        : "<div class='rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500'>현재 활동 구성원이 없습니다.</div>";
+      currentMembersContainer.innerHTML = currentMembers.length
+        ? createMemberAccordion(currentMembers, true)
+        : '<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">현재 활동 구성원이 없습니다.</div>';
 
-      const alumniGroups = groupMembersByGeneration(alumniMembers);
-      const generationKeys = Object.keys(alumniGroups).sort(function(a, b) {
-        const numA = parseInt(a, 10);
-        const numB = parseInt(b, 10);
-        if (Number.isNaN(numA) || Number.isNaN(numB)) return String(a).localeCompare(String(b), "ko-KR");
-        return numA - numB;
-      });
+      alumniContainer.innerHTML = alumniMembers.length
+        ? createMemberAccordion(alumniMembers, false)
+        : '<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">Alumni로 분류된 회원이 없습니다. 활동 종료 값을 입력하면 이곳에 표시됩니다.</div>';
 
-      alumniContainer.innerHTML = generationKeys.length
-        ? generationKeys.map(function(generation) {
-            return "<div><h3 class='mb-3 text-base font-bold text-slate-700'>연약 " + escapeHTML(generation) + "기</h3><div class='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>" + sortMembers(alumniGroups[generation]).map(createMemberCard).join("") + "</div></div>";
-          }).join("")
-        : "<div class='rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500'>Alumni로 분류된 회원이 없습니다. 활동 종료 값을 입력하면 이곳에 표시됩니다.</div>";
-
-      document.querySelectorAll(".member-btn").forEach(function(button) {
-        button.addEventListener("click", function() {
+      document.querySelectorAll('.member-btn').forEach(button => {
+        button.addEventListener('click', () => {
           selectedMember = button.dataset.name;
-          searchInput.value = "";
+          searchInput.value = '';
           renderMembers();
           renderPresentations();
         });
@@ -280,25 +348,12 @@
 
     function isMemberInPresentation(memberName, presentation) {
       const target = normalizeName(memberName);
-      return splitPresenters(presentation["발표자명단"]).some(function(name) {
-        return normalizeName(name) === target;
-      });
+      return splitPresenters(presentation['발표자명단']).some(name => normalizeName(name) === target);
     }
 
     function isCurrentMemberPresentation(presentation) {
-      const currentNames = getCurrentMembers().map(function(member) {
-        return normalizeName(member["이름"]);
-      });
-      return splitPresenters(presentation["발표자명단"]).some(function(name) {
-        return currentNames.includes(normalizeName(name));
-      });
-    }
-
-    function formatDate(dateString) {
-      if (!dateString) return "날짜 미정";
-      const date = new Date(dateString);
-      if (Number.isNaN(date.getTime())) return dateString;
-      return date.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+      const currentNames = getCurrentMembers().map(member => normalizeName(member['이름']));
+      return splitPresenters(presentation['발표자명단']).some(name => currentNames.includes(normalizeName(name)));
     }
 
     function renderPresentations() {
@@ -306,78 +361,75 @@
       let filtered = presentations;
 
       if (selectedMember) {
-        filtered = filtered.filter(function(presentation) {
-          return isMemberInPresentation(selectedMember, presentation);
-        });
-        presentationTitle.textContent = selectedMember + " 참여 발표";
-        presentationSubtitle.textContent = "개인 발표와 팀 발표를 모두 포함합니다.";
-        clearFilterBtn.classList.remove("hidden");
+        filtered = filtered.filter(presentation => isMemberInPresentation(selectedMember, presentation));
+        presentationTitle.textContent = `${selectedMember} 참여 발표`;
+        presentationSubtitle.textContent = '개인 발표와 팀 발표를 모두 포함합니다.';
+        clearFilterBtnTop.classList.remove('hidden');
+        clearFilterBtnAlumni.classList.remove('hidden');
       } else {
         filtered = filtered.filter(isCurrentMemberPresentation);
-        presentationTitle.textContent = "학부 최근 발표 이력";
-        presentationSubtitle.textContent = "현재 활동 구성원이 참여한 발표를 최신순으로 표시합니다.";
-        clearFilterBtn.classList.add("hidden");
+        presentationTitle.textContent = '학부 최근 발표 이력';
+        presentationSubtitle.textContent = '현재 활동 구성원이 참여한 발표를 최신순으로 표시합니다.';
+        clearFilterBtnTop.classList.add('hidden');
+        clearFilterBtnAlumni.classList.add('hidden');
       }
 
       if (keyword) {
-        filtered = filtered.filter(function(presentation) {
-          const haystack = [presentation["주제"], presentation["발표유형"], presentation["발표자명단"], presentation["날짜"]].join(" ").toLowerCase();
+        filtered = filtered.filter(presentation => {
+          const haystack = [presentation['주제'], presentation['발표유형'], presentation['발표자명단'], presentation['날짜']].join(' ').toLowerCase();
           return haystack.includes(keyword);
         });
       }
 
       const sorted = sortByDateDesc(filtered);
       if (sorted.length === 0) {
-        presentationsContainer.innerHTML = "<div class='rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500'>표시할 발표가 없습니다.</div>";
+        presentationsContainer.innerHTML = '<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">표시할 발표가 없습니다.</div>';
         return;
       }
 
-      presentationsContainer.innerHTML = sorted.map(function(presentation) {
-        const date = presentation["날짜"] || "";
-        const topic = presentation["주제"] || "주제 없음";
-        const type = presentation["발표유형"] || "유형 미상";
-        const presenters = splitPresenters(presentation["발표자명단"]);
-        const link = presentation["자료링크"] || "";
+      presentationsContainer.innerHTML = sorted.map(presentation => {
+        const date = presentation['날짜'] || '';
+        const topic = presentation['주제'] || '주제 없음';
+        const type = presentation['발표유형'] || '유형 미상';
+        const presenters = splitPresenters(presentation['발표자명단']);
+        const link = presentation['자료링크'] || '';
+        const presenterBadges = presenters.map(name => `<button type="button" class="presenter-link rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-900 hover:text-white" data-name="${escapeHTML(name)}">${escapeHTML(name)}</button>`).join(' ');
 
-        const presenterBadges = presenters.map(function(name) {
-          return "<button type='button' class='presenter-link rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-900 hover:text-white' data-name='" + escapeHTML(name) + "'>" + escapeHTML(name) + "</button>";
-        }).join(" ");
+        return `
+          <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-xs font-medium text-slate-500">${escapeHTML(formatDate(date))}</p>
+                <h3 class="mt-1 text-base font-bold leading-6 text-slate-950">${escapeHTML(topic)}</h3>
+              </div>
+              <span class="w-fit rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white">${escapeHTML(type)}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-1.5">${presenterBadges || '<span class="text-xs text-slate-400">발표자 미상</span>'}</div>
+            ${link ? `<a href="${escapeHTML(link)}" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">자료 보기</a>` : '<p class="mt-4 text-sm text-slate-400">등록된 자료 링크가 없습니다.</p>'}
+          </article>
+        `;
+      }).join('');
 
-        let html = "";
-        html += "<article class='rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md'>";
-        html += "<div class='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between'>";
-        html += "<div><p class='text-xs font-medium text-slate-500'>" + escapeHTML(formatDate(date)) + "</p>";
-        html += "<h3 class='mt-1 text-base font-bold leading-6 text-slate-950'>" + escapeHTML(topic) + "</h3></div>";
-        html += "<span class='w-fit rounded-full bg-slate-900 px-3 py-1 text-xs font-medium text-white'>" + escapeHTML(type) + "</span>";
-        html += "</div>";
-        html += "<div class='mt-3 flex flex-wrap gap-1.5'>" + (presenterBadges || "<span class='text-xs text-slate-400'>발표자 미상</span>") + "</div>";
-        if (link) {
-          html += "<a href='" + escapeHTML(link) + "' target='_blank' rel='noopener noreferrer' class='mt-4 inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100'>자료 보기</a>";
-        } else {
-          html += "<p class='mt-4 text-sm text-slate-400'>등록된 자료 링크가 없습니다.</p>";
-        }
-        html += "</article>";
-        return html;
-      }).join("");
-
-      document.querySelectorAll(".presenter-link").forEach(function(button) {
-        button.addEventListener("click", function() {
+      document.querySelectorAll('.presenter-link').forEach(button => {
+        button.addEventListener('click', () => {
           selectedMember = button.dataset.name;
-          searchInput.value = "";
+          searchInput.value = '';
           renderMembers();
           renderPresentations();
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
       });
     }
 
-    clearFilterBtn.addEventListener("click", function() {
+    function clearSelectedFilter() {
       selectedMember = null;
       renderMembers();
       renderPresentations();
-    });
+    }
 
-    searchInput.addEventListener("input", renderPresentations);
+    clearFilterBtnTop.addEventListener('click', clearSelectedFilter);
+    clearFilterBtnAlumni.addEventListener('click', clearSelectedFilter);
+    searchInput.addEventListener('input', renderPresentations);
 
     async function init() {
       try {
@@ -388,12 +440,12 @@
         renderMembers();
         renderPresentations();
 
-        statusBox.textContent = "회원 " + members.length + "명, 현재 학부 " + getCurrentMembers().length + "명, Alumni " + getAlumniMembers().length + "명, 발표 " + presentations.length + "건을 불러왔습니다.";
-        statusBox.className = "mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm";
+        statusBox.textContent = `회원 ${members.length}명, 현재 학부 ${getCurrentMembers().length}명, Alumni ${getAlumniMembers().length}명, 발표 ${presentations.length}건을 불러왔습니다.`;
+        statusBox.className = 'mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-sm';
       } catch (error) {
         console.error(error);
-        statusBox.textContent = "데이터를 불러오지 못했습니다. CSV URL과 웹 게시 상태를 확인하세요.";
-        statusBox.className = "mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm";
+        statusBox.textContent = '데이터를 불러오지 못했습니다. CSV URL과 웹 게시 상태를 확인하세요.';
+        statusBox.className = 'mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 shadow-sm';
       }
     }
 
